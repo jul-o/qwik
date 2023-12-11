@@ -7,13 +7,21 @@ import type { QRL } from '../qrl/qrl.public';
 import type { QwikElement } from '../render/dom/virtual-element';
 import type { RenderContext } from '../render/types';
 import { getContext, HOST_FLAG_DYNAMIC } from '../state/context';
-import { QContainerSelector, QLocaleAttr, RenderEvent } from '../util/markers';
+import {
+  ComputedEvent,
+  QContainerSelector,
+  QLocaleAttr,
+  RenderEvent,
+  ResourceEvent,
+  TaskEvent,
+} from '../util/markers';
 import { isPromise } from '../util/promises';
 import { seal } from '../util/qdev';
 import { isArray } from '../util/types';
 import { setLocale } from './use-locale';
 import type { Subscriber } from '../state/common';
 import type { Signal } from '../state/signal';
+import type { ServerRequestEvent } from '@builder.io/qwik-city/middleware/request-handler';
 
 declare const document: QwikDocument;
 
@@ -22,29 +30,44 @@ export interface StyleAppend {
   content: string | null;
 }
 
+export type PossibleEvents =
+  | Event
+  | ServerRequestEvent
+  | typeof TaskEvent
+  | typeof RenderEvent
+  | typeof ComputedEvent
+  | typeof ResourceEvent;
+
 export interface RenderInvokeContext extends InvokeContext {
-  $url$: URL;
-  $seq$: number;
-  $doc$: Document;
-  $hostElement$: QwikElement;
-  $element$: Element;
-  $event$: any;
-  $qrl$: QRL<any>;
-  $waitOn$: Promise<any>[];
-  $subscriber$: Subscriber | null;
   $renderCtx$: RenderContext;
+  /** The parent document */
+  $doc$: Document;
+  // The below are just always-defined attributes of InvokeContext.
+  $hostElement$: QwikElement;
+  $event$: PossibleEvents;
+  $waitOn$: Promise<unknown>[];
+  $subscriber$: Subscriber | null;
 }
 
 export type InvokeTuple = [Element, Event, URL?];
 
+/** The shared state during an invoke() call */
 export interface InvokeContext {
+  /* The URL of the QRL */
   $url$: URL | undefined;
-  $seq$: number;
+  /** The next available index for the sequentialScope array */
+  $i$: number;
+  /** The Virtual parent component for the current component code */
   $hostElement$: QwikElement | undefined;
+  /** The current DOM element */
   $element$: Element | undefined;
-  $event$: any | undefined;
-  $qrl$: QRL<any> | undefined;
-  $waitOn$: Promise<any>[] | undefined;
+  /** The event we're currently handling */
+  $event$: PossibleEvents | undefined;
+  /** The QRL function we're currently executing */
+  $qrl$: QRL | undefined;
+  /** Promises that need awaiting before the current invocation is done */
+  $waitOn$: Promise<unknown>[] | undefined;
+  /** The current subscriber for registering signal reads */
   $subscriber$: Subscriber | null | undefined;
   $renderCtx$: RenderContext | undefined;
   $locale$: string | undefined;
@@ -52,9 +75,7 @@ export interface InvokeContext {
 
 let _context: InvokeContext | undefined;
 
-/**
- * @public
- */
+/** @public */
 export const tryGetInvokeContext = (): InvokeContext | undefined => {
   if (!_context) {
     const context = typeof document !== 'undefined' && document && document.__q_context__;
@@ -62,7 +83,7 @@ export const tryGetInvokeContext = (): InvokeContext | undefined => {
       return undefined;
     }
     if (isArray(context)) {
-      return (document.__q_context__ = newInvokeContextFromTuple(context as any));
+      return (document.__q_context__ = newInvokeContextFromTuple(context as InvokeTuple));
     }
     return context as InvokeContext;
   }
@@ -87,28 +108,41 @@ export const useInvokeContext = (): RenderInvokeContext => {
   assertDefined(ctx.$renderCtx$, `invoke: $renderCtx$ must be defined`, ctx);
   assertDefined(ctx.$subscriber$, `invoke: $subscriber$ must be defined`, ctx);
 
-  return ctx as any;
+  return ctx as RenderInvokeContext;
 };
 
-export const useBindInvokeContext = <T extends ((...args: any[]) => any) | undefined>(
-  callback: T
-): T => {
-  if (callback == null) {
-    return callback;
+export function useBindInvokeContext<FN extends (...args: any) => any>(
+  this: unknown,
+  fn: FN | undefined
+): typeof fn {
+  if (fn == null) {
+    return fn;
   }
   const ctx = getInvokeContext();
-  return ((...args: any[]) => {
-    return invoke(ctx, callback.bind(undefined, ...args));
-  }) as T;
-};
-export function invoke<ARGS extends any[] = any[], RET = any>(
-  this: any,
+  return function (this: unknown, ...args: Parameters<FN>) {
+    return (invokeApply<FN>).call(this, ctx, fn!, args);
+  } as FN;
+}
+
+/** Call a function with the given InvokeContext and given arguments. */
+export function invoke<FN extends (...args: any) => any>(
+  this: unknown,
   context: InvokeContext | undefined,
-  fn: (...args: ARGS) => RET,
-  ...args: ARGS
-): RET {
+  fn: FN,
+  ...args: Parameters<FN>
+): ReturnType<FN> {
+  return invokeApply.call(this, context, fn, args);
+}
+
+/** Call a function with the given InvokeContext and array of arguments. */
+export function invokeApply<FN extends (...args: any) => any>(
+  this: unknown,
+  context: InvokeContext | undefined,
+  fn: FN,
+  args: Parameters<FN>
+): ReturnType<FN> {
   const previousContext = _context;
-  let returnValue: RET;
+  let returnValue: ReturnType<FN>;
   try {
     _context = context;
     returnValue = fn.apply(this, args);
@@ -118,7 +152,7 @@ export function invoke<ARGS extends any[] = any[], RET = any>(
   return returnValue;
 }
 
-export const waitAndRun = (ctx: RenderInvokeContext, callback: () => any) => {
+export const waitAndRun = (ctx: RenderInvokeContext, callback: () => unknown) => {
   const waitOn = ctx.$waitOn$;
   if (waitOn.length === 0) {
     const result = callback();
@@ -130,32 +164,32 @@ export const waitAndRun = (ctx: RenderInvokeContext, callback: () => any) => {
   }
 };
 
-export const newInvokeContextFromTuple = (context: InvokeTuple) => {
-  const element = context[0];
+export const newInvokeContextFromTuple = ([element, event, url]: InvokeTuple) => {
   const container = element.closest(QContainerSelector);
   const locale = container?.getAttribute(QLocaleAttr) || undefined;
   locale && setLocale(locale);
-  return newInvokeContext(locale, undefined, element, context[1], context[2]);
+  return newInvokeContext(locale, undefined, element, event, url);
 };
 
+// TODO how about putting url and locale (and event/custom?) in to a "static" object
 export const newInvokeContext = (
   locale?: string,
   hostElement?: QwikElement,
   element?: Element,
-  event?: any,
+  event?: PossibleEvents,
   url?: URL
 ): InvokeContext => {
   const ctx: InvokeContext = {
-    $seq$: 0,
+    $url$: url,
+    $i$: 0,
     $hostElement$: hostElement,
     $element$: element,
     $event$: event,
-    $url$: url,
-    $locale$: locale,
     $qrl$: undefined,
-    $renderCtx$: undefined,
-    $subscriber$: undefined,
     $waitOn$: undefined,
+    $subscriber$: undefined,
+    $renderCtx$: undefined,
+    $locale$: locale,
   };
   seal(ctx);
   return ctx;
@@ -166,6 +200,8 @@ export const getWrappingContainer = (el: QwikElement): Element | null => {
 };
 
 /**
+ * Don't track listeners for this callback
+ *
  * @public
  */
 export const untrack = <T>(fn: () => T): T => {
@@ -180,6 +216,8 @@ const trackInvocation = /*#__PURE__*/ newInvokeContext(
 );
 
 /**
+ * Mark sub as a listener for the signal
+ *
  * @public
  */
 export const trackSignal = <T>(signal: Signal, sub: Subscriber): T => {
@@ -187,9 +225,7 @@ export const trackSignal = <T>(signal: Signal, sub: Subscriber): T => {
   return invoke(trackInvocation, () => signal.value);
 };
 
-/**
- * @internal
- */
+/** @internal */
 export const _getContextElement = (): unknown => {
   const iCtx = tryGetInvokeContext();
   if (iCtx) {
@@ -199,9 +235,7 @@ export const _getContextElement = (): unknown => {
   }
 };
 
-/**
- * @internal
- */
+/** @internal */
 export const _getContextEvent = (): unknown => {
   const iCtx = tryGetInvokeContext();
   if (iCtx) {
@@ -209,10 +243,8 @@ export const _getContextEvent = (): unknown => {
   }
 };
 
-/**
- * @internal
- */
-export const _jsxBranch = (input?: any) => {
+/** @internal */
+export const _jsxBranch = <T>(input?: T) => {
   const iCtx = tryGetInvokeContext();
   if (iCtx && iCtx.$hostElement$ && iCtx.$renderCtx$) {
     const hostElement = iCtx.$hostElement$;
@@ -222,9 +254,7 @@ export const _jsxBranch = (input?: any) => {
   return input;
 };
 
-/**
- * @internal
- */
+/** @internal */
 export const _waitUntilRendered = (elm: Element) => {
   const containerEl = getWrappingContainer(elm);
   if (!containerEl) {

@@ -8,7 +8,14 @@ import { EditIcon } from '../svgs/edit-icon';
 import { GlobalStore } from '../../context';
 import { AlertIcon } from '../svgs/alert-icon';
 
-const QWIK_GROUP = ['components', 'concepts', 'faq', 'getting-started', 'think-qwik'];
+const QWIK_GROUP = [
+  'components',
+  'concepts',
+  'faq',
+  'getting-started',
+  'think-qwik',
+  'deprecated-features',
+];
 
 const QWIK_ADVANCED_GROUP = [
   'containers',
@@ -17,7 +24,7 @@ const QWIK_ADVANCED_GROUP = [
   'eslint',
   'library',
   'optimizer',
-  'prefetching',
+  'modules-prefetching',
   'qrl',
   'qwikloader',
   'vite',
@@ -30,16 +37,17 @@ const QWIKCITY_GROUP = [
   'endpoints',
   'env-variables',
   'guides',
+  'html-attributes',
   'layout',
   'middleware',
   'pages',
   'project-structure',
   'qwikcity',
-  'qwikcity-deprecated-features',
   'route-loader',
   'routing',
   'server$',
   'troubleshooting',
+  'validator',
 ];
 const QWIKCITY_ADVANCED_GROUP = [
   'content-security-policy',

@@ -2,6 +2,7 @@ import { build, type BuildOptions } from 'esbuild';
 import {
   access,
   type BuildConfig,
+  editDeps,
   getBanner,
   nodeTarget,
   readFile,
@@ -16,9 +17,7 @@ import { constants } from 'node:fs';
 import { inlineQwikScriptsEsBuild } from './submodule-qwikloader';
 import RawPlugin from 'esbuild-plugin-raw';
 
-/**
- * Builds @builder.io/optimizer
- */
+/** Builds @builder.io/optimizer */
 export async function submoduleOptimizer(config: BuildConfig) {
   const submodule = 'optimizer';
 
@@ -31,6 +30,7 @@ export async function submoduleOptimizer(config: BuildConfig) {
       outdir: config.distQwikPkgDir,
       bundle: true,
       sourcemap: false,
+      platform: 'node',
       target,
       external: [
         /* no Node.js built-in externals allowed! */
@@ -51,7 +51,7 @@ export async function submoduleOptimizer(config: BuildConfig) {
         'globalThis.QWIK_VERSION': JSON.stringify(config.distVersion),
         ...qwikloaderScripts,
       },
-      plugins: [RawPlugin()],
+      plugins: [RawPlugin(), editDeps()],
     });
 
     const cjsBanner = [`globalThis.qwikOptimizer = (function (module) {`].join('\n');
@@ -70,9 +70,8 @@ export async function submoduleOptimizer(config: BuildConfig) {
         'globalThis.QWIK_VERSION': JSON.stringify(config.distVersion),
         ...qwikloaderScripts,
       },
-      platform: 'node',
       target: nodeTarget,
-      plugins: [RawPlugin()],
+      plugins: [RawPlugin(), editDeps()],
     });
 
     await Promise.all([esmBuild, cjsBuild]);

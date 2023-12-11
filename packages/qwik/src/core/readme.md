@@ -81,7 +81,7 @@ The `taskFn` only executes if the observed inputs change. To observe the inputs,
 
 ### Example
 
-The `useTask` function is used to observe the `state.count` property. Any changes to the `state.count` cause the `taskFn` to execute which in turn updates the `state.doubleCount` to the double of `state.count`.
+The `useTask` function is used to observe the `store.count` property. Any changes to the `store.count` cause the `taskFn` to execute which in turn updates the `store.doubleCount` to the double of `store.count`.
 
 <docs code="./examples.tsx#use-task"/>
 
@@ -245,6 +245,10 @@ At times it may be necessary to resolve a `QRL` reference to the actual value. T
 <docs code="./examples.tsx#qrl-usage-import"/>
 
 NOTE: `element` is needed because `QRL`s are relative and need a base location to resolve against. The base location is encoded in the HTML in the form of `<div q:base="/url">`.
+
+## `QRL.resolved`
+
+Once `QRL.resolve()` returns, the value is stored under `QRL.resolved`. This allows the value to be used without having to await `QRL.resolve()` again.
 
 ## Question: Why not just use `import()`?
 

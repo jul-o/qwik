@@ -1,5 +1,6 @@
 ---
 title: Routing | Qwik City
+description: Learn about routing in Qwik City which is like other file-system based such as Next.js, SvelteKit, SolidStart or Remix.
 contributors:
   - manucorporat
   - nnelgxorz
@@ -11,6 +12,14 @@ contributors:
   - AnthonyPAlicea
   - hamatoyogi
   - jakovljevic-mladen
+  - claudioshiver
+  - maiieul
+  - igorbabko
+  - jordanw66
+  - mrhoodz
+  - chsanch
+updated_at: '2023-10-02T22:44:45Z'
+created_at: '2023-03-20T23:45:13Z'
 ---
 
 # Routing
@@ -22,7 +31,7 @@ Routing in Qwik City is file-system based like [Next.js](https://nextjs.org/docs
 - **📄 `index.ts` file:** Define an [endpoint](/docs/endpoints/).
 - **🖼️ `layout.tsx` files:** Define nested [layout](/docs/layout/) and/or a [middleware](/docs/middleware/).
 
-<video autoplay>
+<video autoplay playsinline muted loop>
  <source src="https://cdn.builder.io/o/assets%2FYJIGb4i01jvw0SRdL5Bt%2Fabf8f471ba884b938d0863d85ed4c50f%2Fcompressed?apiKey=YJIGb4i01jvw0SRdL5Bt&token=abf8f471ba884b938d0863d85ed4c50f&alt=media&optimized=true"/>
 </video>
 
@@ -144,7 +153,7 @@ export default component$(() => {
 
 > In this example, a request handle will always set the `Cache-Control` header to `private` and the page will be rendered as an HTML page, but if the request contains a `format=json` query param, the endpoint will return a JSON response instead.
 
-## `layout.` files
+## `layout.tsx` files
 
 Layout modules are very similar to `index` files, both can handle requests and render Qwik components, however, layouts are designed to work like a middleware, allowing to **share UI and request handling (middleware)** to a set of routes.
 
@@ -175,7 +184,10 @@ For the route `https://example.com/admin`, the `onRequest` methods will be execu
 
 1. `src/routes/layout.tsx`'s `onRequest`
 2. `src/routes/admin/layout.tsx`'s `onRequest`
-3. `src/routes/admin/index.tsx`'s component
+3. `src/routes/admin/index.tsx`'s `onRequest`
+4. `src/routes/admin/index.tsx`'s component
+
+An `onRequest` handler in `src/routes/index.tsx` doesn't get executed.
 
 ### Nested layouts
 
@@ -216,16 +228,16 @@ export default component$(() => {
   const nav = useNavigate();
   return (
     <div>
-      <Link href="/about">About (prefered)</Link>
+      <Link href="/about">About (preferred)</Link>
       <button onClick$={() => nav('/about')}>About</button>
     </div>
   );
 });
 ```
 
-> The `Link` component uses the `useNavigate()` hook internally.
+> The `Link` component uses the `useNavigate()` hook [internally](https://github.com/BuilderIO/qwik/blob/e452582f4728cbcb7bf85d03293e757302286683/packages/qwik-city/runtime/src/link-component.tsx#L33).
 
-### Refreshing
+### `<Link reload>`
 
 The `Link` with the `reload` prop can be used to refresh the current page.
 You can also call the `nav()` function from the `useNavigate()` hook, without arguments.
@@ -245,7 +257,7 @@ export default component$(() => {
 
   return (
     <div>
-      <Link reload>Refresh (better accesibility)</Link>
+      <Link reload>Refresh (better accessibility)</Link>
       <button onClick$={() => nav()}>Refresh</button>
       <p>Server time: {serverTime.value}</p>
     </div>
@@ -256,6 +268,16 @@ export default component$(() => {
 > When the page refreshes, all the matching `routeLoader$` and server handlers (`onRequest`) will re-execute in the server and the UI will re-render accordingly.
 
 > While refreshing the page, the `isNavigating` boolean from `useLocation()` will be `true` until the page is fully rendered.
+
+### `<Link prefetch>`
+
+The Link component's `prefetch` prop can be used to improve the perceived performance of the application. Although Qwik pages excel at lazy loading javascript, this feature can come in handy for content-heavy pages or SSR pages that need to wait for database or API calls.
+
+```tsx
+<Link prefetch href="/about">About</Link>
+```
+
+By simply adding the `prefetch` prop, your Link component will start prefetching the page as soon as the user hovers over the link. If the application is done prefetching when the user clicks on the link, the following page will appear instantly.
 
 ### Scroll Restoration
 
@@ -325,9 +347,65 @@ Each request handler, such as `onRequest`, `onGet`, `onPost`, etc., are passed i
 - `request`: HTTP [Request](https://developer.mozilla.org/en-US/docs/Web/API/Request).
 - `send`: Send a body response. The `Content-Type` response header is not automatically set when using `send()` and must be set manually. A `send()` response can only be called once.
 - `sharedMap`: Shared Map across all the request handlers. Every HTTP request will get a new instance of the shared map. The shared map is useful for sharing data between request handlers.
-- `status`: HTTP response [status code](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status). Sets the status code when called with an argument. Always returns the status code, so calling `status()` without an argument will can be used to return the current status code.
-- `text`: Convenience method to send an text body response. The response will be automatically set the `Content-Type` header to`text/plain; charset=utf-8`. An `text()` response can only be called once.
+- `status`: HTTP response [status code](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status). Sets the status code when called with an argument. Always returns the status code, so calling `status()` without an argument can be used to return the current status code.
+- `text`: Convenience method to send a text body response. The response will be automatically set the `Content-Type` header to`text/plain; charset=utf-8`. A `text()` response can only be called once.
 - `url`: HTTP request [URL](https://developer.mozilla.org/en-US/docs/Web/API/URL).
+
+## Rewrite routes
+
+You can rewrite your pathnames in order to reuse one single page component with its own middlewares and layouts for multiple pages.
+This could be useful for SEO purposes or to translate your pages in different languages.
+
+> **Translate localized urls with prefix:**
+>
+> For localization purposes you may want to translate your routes from `/products` to `/it/prodotti`
+> or to `/fr/produits` and `/products/product-name` to `/it/prodotti/nome-prodotto` or `/fr/produits/nom-du-produit`
+> without having multiple routes files for each locale but reusing the same page component, layouts, middlewares and so on.
+>
+> Parameters name will not be changed so if the route file is `/products/[slug]/index.tsx` and the url is `/products/product-name`,
+> `/it/prodotti/nome-prodotto` or `/fr/produits/nom-du-produit` you will receive the same path parameter `slug` with
+> the values `product-name`, `nome-prodotto` or `nom-du-produit`.
+
+> **Rewrite urls without prefix:**
+>
+> It's rare but you may want to have aliases for the same path.
+> For example you may want both `/docs` and `/documents` to be rendered from the same page component or
+> you may want to translate `/products` to `/prodotti` without adding the `/it` prefix.
+
+For each folder under the routes one if there are occurrences of the `paths` keys
+in the pathname the route node will be copied replacing all the occurrences of `paths` keys with the related `paths` values.
+All path parameters will preserve the same name. If there is a prefix it will be added at the beginning of the rewritten pathname.
+
+You can set the rewrite rules as follows in your `vite.config.ts`:
+
+```tsx
+import { defineConfig } from 'vite';
+import { qwikCity } from '@builder.io/qwik-city/vite';
+
+export default defineConfig(async () => {
+  return {
+    plugins: [
+      qwikCity({
+        rewriteRoutes: [
+            {
+              paths: {
+                  'docs': 'documentation'
+              },
+            },
+            {
+              prefix: 'it',
+              paths: {
+                'docs': 'documentazione',
+                'getting-started': 'per-iniziare',
+                'products': 'prodotti',
+              },
+            },
+          ],
+      }),
+    ],
+  };
+});
+```
 
 ## Advanced routing
 

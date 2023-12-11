@@ -5,8 +5,8 @@ import { generateApiMarkdownDocs } from './api-docs';
 import { type BuildConfig, panic } from './util';
 
 /**
- * Create each submodule's bundled dts file, and ensure
- * the public API has not changed for a production build.
+ * Create each submodule's bundled dts file, and ensure the public API has not changed for a
+ * production build.
  */
 export async function apiExtractor(config: BuildConfig) {
   const apiJsonInputDir = join(config.rootDir, 'dist-dev', 'api');
@@ -98,6 +98,11 @@ export async function apiExtractor(config: BuildConfig) {
   );
   createTypesApi(
     config,
+    join(config.packagesDir, 'qwik-city', 'adapters', 'bun-server', 'vite'),
+    join(config.packagesDir, 'qwik-city', 'lib', 'adapters', 'bun-server', 'vite', 'index.d.ts')
+  );
+  createTypesApi(
+    config,
     join(config.packagesDir, 'qwik-city', 'adapters', 'node-server', 'vite'),
     join(config.packagesDir, 'qwik-city', 'lib', 'adapters', 'node-server', 'vite', 'index.d.ts')
   );
@@ -143,6 +148,11 @@ export async function apiExtractor(config: BuildConfig) {
     config,
     join(config.packagesDir, 'qwik-city', 'middleware', 'cloudflare-pages'),
     join(config.packagesDir, 'qwik-city', 'lib', 'middleware', 'cloudflare-pages', 'index.d.ts')
+  );
+  createTypesApi(
+    config,
+    join(config.packagesDir, 'qwik-city', 'middleware', 'bun'),
+    join(config.packagesDir, 'qwik-city', 'lib', 'middleware', 'bun', 'index.d.ts')
   );
   createTypesApi(
     config,
@@ -206,7 +216,10 @@ function createTypesApi(
       if (msg.text.includes('Analysis will use')) {
         return;
       }
-      if (msg.messageId === 'console-compiler-version-notice') {
+      if (
+        msg.messageId === 'console-compiler-version-notice' ||
+        msg.messageId === 'ae-undocumented'
+      ) {
         return;
       }
       console.error(`❌ API Extractor, submodule: "${inPath}"\n${extractorConfigPath}\n`, msg);
@@ -273,6 +286,11 @@ declare module '*.mdx' {
   export const frontmatter: Record<string, any>;
   export default node;
 }
+// SVG ?jsx
+declare module '*.svg?jsx' {
+  const Cmp: import('./core').FunctionComponent<import('./core').QwikIntrinsicElements['svg']>
+  export default Cmp;
+}
 // Image ?jsx
 declare module '*?jsx' {
   const Cmp: import('./core').FunctionComponent<Omit<import('./core').QwikIntrinsicElements['img'], 'src' | 'width' | 'height' | 'srcSet'>>
@@ -281,7 +299,6 @@ declare module '*?jsx' {
   export const height: number;
   export const srcSet: string;
 }
-
 // Image &jsx
 declare module '*&jsx' {
   const Cmp: import('./core').FunctionComponent<Omit<import('./core').QwikIntrinsicElements['img'], 'src' | 'width' | 'height' | 'srcSet'>>
@@ -304,8 +321,8 @@ declare module '*&jsx' {
 }
 
 /**
- * Fix up the generated dts content, and ensure it's using a relative
- * path to find the core.d.ts file, rather than node resolving it.
+ * Fix up the generated dts content, and ensure it's using a relative path to find the core.d.ts
+ * file, rather than node resolving it.
  */
 function fixDtsContent(config: BuildConfig, srcPath: string, relativePath?: string) {
   let dts = readFileSync(srcPath, 'utf-8');

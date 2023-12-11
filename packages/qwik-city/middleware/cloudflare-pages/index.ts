@@ -13,11 +13,15 @@ import { setServerPlatform } from '@builder.io/qwik/server';
 
 // @builder.io/qwik-city/middleware/cloudflare-pages
 
-/**
- * @public
- */
+/** @public */
 export function createQwikCity(opts: QwikCityCloudflarePagesOptions) {
-  (globalThis as any).TextEncoderStream = TextEncoderStream;
+  try {
+    // https://developers.cloudflare.com/workers/configuration/compatibility-dates/#streams-constructors
+    // this will throw if CF compatibility_date < 2022-11-30
+    new globalThis.TextEncoderStream();
+  } catch (e) {
+    (globalThis as any).TextEncoderStream = TextEncoderStream;
+  }
   const qwikSerializer = {
     _deserializeData,
     _serializeData,
@@ -125,14 +129,10 @@ export function createQwikCity(opts: QwikCityCloudflarePagesOptions) {
   return onCloudflarePagesFetch;
 }
 
-/**
- * @public
- */
+/** @public */
 export interface QwikCityCloudflarePagesOptions extends ServerRenderOptions {}
 
-/**
- * @public
- */
+/** @public */
 export interface PlatformCloudflarePages {
   request: Request;
   env?: Record<string, any>;

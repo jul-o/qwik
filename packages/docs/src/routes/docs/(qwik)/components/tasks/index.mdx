@@ -9,6 +9,16 @@ contributors:
   - sreeisalso
   - brunocrosier
   - harishkrishnan24
+  - gioboa
+  - bodhicodes
+  - zanettin
+  - blackpr
+  - mrhoodz
+  - ehrencrona
+  - julianobrasil
+  - adamdbradley
+updated_at: '2023-10-18T07:33:22Z'
+created_at: '2023-03-31T02:40:50Z'
 ---
 
 import CodeSandbox from '../../../../../components/code-sandbox/index.tsx';
@@ -63,7 +73,7 @@ Thanks to [Resumability](/docs/(qwik)/concepts/resumable/index.mdx), component l
 
 **BROWSER**: Sometimes a component will be first mounted/rendered in the browser, for example when the user SPA navigates to a new page, or a "modal" component first appears in the page. In that case, the lifecycle will run like this:
 
-```bash /useTask$/#d /RENDER/#b /useVisibleTask$/#c
+```bash
   useTask$ --> RENDER --> useVisibleTask$
 
 | -------------- BROWSER --------------- |
@@ -83,7 +93,7 @@ Additionally, this task can be reactive and will re-execute when **tracked** [st
 
 **Notice that any subsequent re-execution of the task will always happen in the browser**, because reactivity is a browser-only thing.
 
-```bash /useTask$(track)/#d /RENDER/#b /CLICK/#a
+```bash
                       (state change) -> (re-execute)
                                   ^            |
                                   |            v
@@ -140,11 +150,11 @@ Use `useTask$()` when you need to:
 - Run code only once before the component is first rendered
 - Programmatically run side-effect code when state changes
 
-> Note, if you're thinking about loading data (like using `fetch()`) inside of `useTask$`, consider using [`useResource$()`](/docs/(qwik)/components/state/#useresource) instead. This API is more efficient in terms of leveraging SSR streaming and parallel data fetching.
+> Note, if you're thinking about loading data (like using `fetch()`) inside of `useTask$`, consider using [`useResource$()`](/docs/components/state/#useresource) instead. This API is more efficient in terms of leveraging SSR streaming and parallel data fetching.
 
 ### On mount
 
-There is not an specific "on-mount" hook in Qwik because `useTask$()` without tracking effectively behaves like a `mount` hook.
+Qwik does not have a specific "on-mount" hook because useTask$() without track() effectively behaves like a mount hook.
 
 This is because `useTask$` runs always at least once when the component is first mounted.
 
@@ -438,6 +448,20 @@ const Clock = component$<{ isRunning: Signal<boolean> }>(({ isRunning }) => {
 
 > In this example the clock starts running immediately on the browser regardless of whether it is visible or not.
 
+### Advanced: Time of running, and managing visibility with CSS
+
+Internally, `useVisibleTask$` is implemented by adding an attribute on the first rendered component (either the returned component or in case of a Fragment, its first child).  With the standard `eagerness`, this means that if the first rendered component is hidden, the task will not run.
+
+This means that you can use CSS to influence when the task runs. For example, if the task should only run on a mobile device, you can return a `<div class="md:invisible" />` (in the case of Tailwind CSS).
+
+This also means you cannot unhide a component using a visible task; for that you can return a Fragment:
+
+```tsx
+return (<>
+  <div />
+  <MyHiddenComponent hidden={!showSignal.value} />
+</>)
+```
 
 ## Use Hook Rules
 

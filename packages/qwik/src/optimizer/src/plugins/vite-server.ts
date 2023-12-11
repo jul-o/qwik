@@ -282,11 +282,14 @@ function invalidPreviewMessage(middlewares: Connect.Server, msg: string) {
   });
 }
 
+const CYPRESS_DEV_SERVER_PATH = '/__cypress/src';
 const FS_PREFIX = `/@fs/`;
 const VALID_ID_PREFIX = `/@id/`;
 const VITE_PUBLIC_PATH = `/@vite/`;
 const internalPrefixes = [FS_PREFIX, VALID_ID_PREFIX, VITE_PUBLIC_PATH];
-const InternalPrefixRE = new RegExp(`^(?:${internalPrefixes.join('|')})`);
+const InternalPrefixRE = new RegExp(
+  `^(${CYPRESS_DEV_SERVER_PATH})?(?:${internalPrefixes.join('|')})`
+);
 
 const shouldSsrRender = (req: IncomingMessage, url: URL) => {
   const pathname = url.pathname;
@@ -309,8 +312,17 @@ const shouldSsrRender = (req: IncomingMessage, url: URL) => {
   if (InternalPrefixRE.test(url.pathname)) {
     return false;
   }
+  if (pathname.includes('@builder.io/qwik/build')) {
+    return false;
+  }
   const acceptHeader = req.headers.accept || '';
-  if (!acceptHeader.includes('text/html')) {
+  const accepts = acceptHeader.split(',').map((accept) => accept.split(';')[0]);
+  if (accepts.length == 1 && accepts.includes('*/*')) {
+    // special case for curl where the default is `*/*` with no additional headers
+    return true;
+  }
+
+  if (!accepts.includes('text/html')) {
     return false;
   }
   return true;

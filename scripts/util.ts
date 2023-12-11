@@ -1,5 +1,5 @@
 import type { Plugin } from 'esbuild';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import mri from 'mri';
 import {
   access as fsAccess,
@@ -24,9 +24,8 @@ import { execa, type Options } from 'execa';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Contains information about the build we're generating by parsing
- * CLI args, and figuring out all the absolute file paths the
- * build will be reading from and writing to.
+ * Contains information about the build we're generating by parsing CLI args, and figuring out all
+ * the absolute file paths the build will be reading from and writing to.
  */
 export interface BuildConfig {
   rootDir: string;
@@ -73,8 +72,8 @@ export interface BuildConfig {
 }
 
 /**
- * Create the `BuildConfig` from the process args, and set the
- * absolute paths the build will be reading from and writing to.
+ * Create the `BuildConfig` from the process args, and set the absolute paths the build will be
+ * reading from and writing to.
  */
 export function loadConfig(args: string[] = []) {
   const config: BuildConfig = mri(args) as any;
@@ -121,9 +120,7 @@ export function terser(opts: MinifyOptions): RollupPlugin {
   };
 }
 
-/**
- * Esbuild plugin to change an import path, but keep it an external path.
- */
+/** Esbuild plugin to change an import path, but keep it an external path. */
 export function importPath(filter: RegExp, newModulePath: string) {
   const plugin: Plugin = {
     name: 'importPathPlugin',
@@ -137,9 +134,51 @@ export function importPath(filter: RegExp, newModulePath: string) {
   return plugin;
 }
 
-/**
- * Standard license banner to place at the top of the generated files.
- */
+const depEdits: Record<string, { src: string; replacement: string }[]> = {
+  // Replace top-level await with a top-level import
+  'vitefu/src/index.js': [
+    {
+      src: `import path from 'node:path'`,
+      replacement: `import path from 'node:path'\nimport _module from 'node:module'`,
+    },
+    {
+      src: `(await import('module')).default`,
+      replacement: `_module`,
+    },
+  ],
+};
+
+/** Esbuild plugin to edit dependency code so it builds successfully */
+export function editDeps() {
+  const plugin: Plugin = {
+    name: 'editDepsPlugin',
+    setup(build) {
+      const filter = new RegExp(
+        `^.*(${Object.keys(depEdits)
+          .map((mod) => {
+            return mod
+              .replace('.', '\\.')
+              .replace('/', process.platform === 'win32' ? '\\\\' : '\\/');
+          })
+          .join('|')})$`
+      );
+      build.onLoad({ filter }, async (args) => {
+        let contents = await readFile(args.path, 'utf-8');
+        for (const modPath in depEdits) {
+          if (args.path.endsWith(modPath)) {
+            for (const edit of depEdits[modPath]) {
+              contents = contents.replace(edit.src, edit.replacement);
+            }
+          }
+        }
+        return { contents, resolveDir: dirname(args.path) };
+      });
+    },
+  };
+  return plugin;
+}
+
+/** Standard license banner to place at the top of the generated files. */
 export const getBanner = (moduleName: string, version: string) => {
   return `
 /**
@@ -153,16 +192,14 @@ export const getBanner = (moduleName: string, version: string) => {
 };
 
 /**
- * The JavaScript target we're going for. Reusing a constant just to make sure
- * all the builds are using the same target.
+ * The JavaScript target we're going for. Reusing a constant just to make sure all the builds are
+ * using the same target.
  */
 export const target = 'es2020';
 
 export const nodeTarget = 'node14';
 
-/**
- * Helper just to know which Node.js modules that should stay external.
- */
+/** Helper just to know which Node.js modules that should stay external. */
 export const nodeBuiltIns = [
   'assert',
   'child_process',
@@ -177,9 +214,7 @@ export const nodeBuiltIns = [
   'util',
 ];
 
-/**
- * Utility just to ignore certain rollup warns we already know aren't issues.
- */
+/** Utility just to ignore certain rollup warns we already know aren't issues. */
 export function rollupOnWarn(warning: any, warn: any) {
   // skip certain warnings
   if (warning.code === `CIRCULAR_DEPENDENCY`) return;
@@ -189,9 +224,7 @@ export function rollupOnWarn(warning: any, warn: any) {
   warn(warning);
 }
 
-/**
- * Helper just to get and format a file's size for logging.
- */
+/** Helper just to get and format a file's size for logging. */
 export async function fileSize(filePath: string) {
   const text = await readFile(filePath);
   const { default: compress } = await import('brotli/compress.js');
@@ -274,9 +307,7 @@ export function panic(msg: string) {
   process.exit(1);
 }
 
-/**
- * Interface for package.json
- */
+/** Interface for package.json */
 export interface PackageJSON {
   name: string;
   version: string;

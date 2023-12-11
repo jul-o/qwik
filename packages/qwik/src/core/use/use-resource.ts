@@ -21,17 +21,18 @@ import { createProxy } from '../state/store';
 import { getProxyTarget } from '../state/common';
 import { isSignal, type Signal } from '../state/signal';
 import { isObject } from '../util/types';
+import { isPromise } from '../util/promises';
 
 /**
  * Options to pass to `useResource$()`
  *
- * @see useResource
  * @public
+ * @see useResource
  */
 export interface ResourceOptions {
   /**
-   * Timeout in milliseconds. If the resource takes more than the specified millisecond, it will timeout.
-   * Resulting on a rejected resource.
+   * Timeout in milliseconds. If the resource takes more than the specified millisecond, it will
+   * timeout. Resulting on a rejected resource.
    */
   timeout?: number;
 }
@@ -40,8 +41,8 @@ export interface ResourceOptions {
 // !!DO NOT EDIT THIS COMMENT DIRECTLY!!!
 // (edit ../readme.md#useResource instead)
 /**
- * This method works like an async memoized function that runs whenever some tracked value
- * changes and returns some data.
+ * This method works like an async memoized function that runs whenever some tracked value changes
+ * and returns some data.
  *
  * `useResource` however returns immediate a `ResourceReturn` object that contains the data and a
  * state that indicates if the data is available or not.
@@ -54,8 +55,8 @@ export interface ResourceOptions {
  *
  * ### Example
  *
- * Example showing how `useResource` to perform a fetch to request the weather, whenever the
- * input city name changes.
+ * Example showing how `useResource` to perform a fetch to request the weather, whenever the input
+ * city name changes.
  *
  * ```tsx
  * const Cmp = component$(() => {
@@ -88,19 +89,18 @@ export interface ResourceOptions {
  * });
  * ```
  *
+ * @public
  * @see Resource
  * @see ResourceReturn
- *
- * @public
  */
 // </docs>
 export const useResourceQrl = <T>(
   qrl: QRL<ResourceFn<T>>,
   opts?: ResourceOptions
 ): ResourceReturn<T> => {
-  const { get, set, i, iCtx, elCtx } = useSequentialScope<ResourceReturn<T>>();
-  if (get != null) {
-    return get;
+  const { val, set, i, iCtx, elCtx } = useSequentialScope<ResourceReturn<T>>();
+  if (val != null) {
+    return val;
   }
   assertQrl(qrl);
 
@@ -129,8 +129,8 @@ export const useResourceQrl = <T>(
 // !!DO NOT EDIT THIS COMMENT DIRECTLY!!!
 // (edit ../readme.md#useResource instead)
 /**
- * This method works like an async memoized function that runs whenever some tracked value
- * changes and returns some data.
+ * This method works like an async memoized function that runs whenever some tracked value changes
+ * and returns some data.
  *
  * `useResource` however returns immediate a `ResourceReturn` object that contains the data and a
  * state that indicates if the data is available or not.
@@ -143,8 +143,8 @@ export const useResourceQrl = <T>(
  *
  * ### Example
  *
- * Example showing how `useResource` to perform a fetch to request the weather, whenever the
- * input city name changes.
+ * Example showing how `useResource` to perform a fetch to request the weather, whenever the input
+ * city name changes.
  *
  * ```tsx
  * const Cmp = component$(() => {
@@ -177,10 +177,9 @@ export const useResourceQrl = <T>(
  * });
  * ```
  *
+ * @public
  * @see Resource
  * @see ResourceReturn
- *
- * @public
  */
 // </docs>
 export const useResource$ = <T>(
@@ -190,22 +189,20 @@ export const useResource$ = <T>(
   return useResourceQrl<T>($(generatorFn), opts);
 };
 
-/**
- * @public
- */
+/** @public */
 export interface ResourceProps<T> {
   readonly value: ResourceReturn<T> | Signal<Promise<T> | T> | Promise<T>;
   onResolved: (value: T) => JSXNode;
   onPending?: () => JSXNode;
-  onRejected?: (reason: any) => JSXNode;
+  onRejected?: (reason: Error) => JSXNode;
 }
 
 // <docs markdown="../readme.md#useResource">
 // !!DO NOT EDIT THIS COMMENT DIRECTLY!!!
 // (edit ../readme.md#useResource instead)
 /**
- * This method works like an async memoized function that runs whenever some tracked value
- * changes and returns some data.
+ * This method works like an async memoized function that runs whenever some tracked value changes
+ * and returns some data.
  *
  * `useResource` however returns immediate a `ResourceReturn` object that contains the data and a
  * state that indicates if the data is available or not.
@@ -218,8 +215,8 @@ export interface ResourceProps<T> {
  *
  * ### Example
  *
- * Example showing how `useResource` to perform a fetch to request the weather, whenever the
- * input city name changes.
+ * Example showing how `useResource` to perform a fetch to request the weather, whenever the input
+ * city name changes.
  *
  * ```tsx
  * const Cmp = component$(() => {
@@ -252,10 +249,9 @@ export interface ResourceProps<T> {
  * });
  * ```
  *
+ * @public
  * @see Resource
  * @see ResourceReturn
- *
- * @public
  */
 // </docs>
 export const Resource = <T>(props: ResourceProps<T>): JSXNode => {
@@ -267,7 +263,7 @@ export const Resource = <T>(props: ResourceProps<T>): JSXNode => {
       if (props.onRejected) {
         resource.value.catch(() => {});
         if (resource._state === 'rejected') {
-          return props.onRejected(resource._error);
+          return props.onRejected(resource._error!);
         }
       }
       if (props.onPending) {
@@ -285,7 +281,7 @@ export const Resource = <T>(props: ResourceProps<T>): JSXNode => {
       }
     }
     promise = resource.value;
-  } else if (resource instanceof Promise) {
+  } else if (isPromise(resource)) {
     promise = resource;
   } else if (isSignal(resource)) {
     promise = Promise.resolve(resource.value);
@@ -331,11 +327,14 @@ export const getInternalResource = <T>(resource: ResourceReturn<T>): ResourceRet
   return getProxyTarget(resource) as any;
 };
 
-export const isResourceReturn = (obj: any): obj is ResourceReturn<any> => {
+export const isResourceReturn = (obj: any): obj is ResourceReturn<unknown> => {
   return isObject(obj) && obj.__brand === 'resource';
 };
 
-export const serializeResource = (resource: ResourceReturnInternal<any>, getObjId: GetObjID) => {
+export const serializeResource = (
+  resource: ResourceReturnInternal<unknown>,
+  getObjId: GetObjID
+) => {
   const state = resource._state;
   if (state === 'resolved') {
     return `0 ${getObjId(resource._resolved)}`;

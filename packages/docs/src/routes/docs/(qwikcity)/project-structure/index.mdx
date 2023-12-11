@@ -4,6 +4,13 @@ contributors:
   - manucorporat
   - steve8708
   - mhevery
+  - dapids
+  - thejackshelton
+  - mrhoodz
+  - whale2002
+  - adamdbradley
+updated_at: '2023-09-21T06:23:47Z'
+created_at: '2023-03-20T23:45:13Z'
 ---
 
 # Project Structure
@@ -86,7 +93,7 @@ Qwik uses Vite to build the project. The `vite.config.ts` file contains the Vite
 
 ## Utilities
 
-Qwik has a utility command called `new` that allows developers to easily create new components and routes. 
+Qwik has a utility command called `new` that allows developers to easily create new components and routes.
 
 Let's say you wanted to create a new component called `Button`, you would run the command:
 ```tsx
@@ -113,7 +120,7 @@ qwik-app-demo
 │   │   └── router-head
 │   │       └── router-head.tsx
 │   │       Button
-│   │       └── index.tsx  
+│   │       └── button.tsx
 │   ├── entry.ssr.tsx
 │   ├── global.css
 │   ├── root.tsx
@@ -128,6 +135,21 @@ qwik-app-demo
 │       └── service-worker.ts
 ├── tsconfig.json
 └── vite.config.ts
+```
+
+If you prefer to generate the `Button` component with the `Button/index.tsx` naming convention, you can could use the command:
+```tsx
+pnpm qwik new --barrel Button
+```
+
+In that case, the `src/components` folder would look like this:
+```bash
+src
+│   ├── components
+│   │   └── router-head
+│   │       └── router-head.tsx
+│   │       Button
+│   │       └── index.tsx
 ```
 
 > This feature was added in Qwik v1.2, and those using an older version will not see this functionality.

@@ -1,6 +1,6 @@
 import { newInvokeContext, invoke, waitAndRun, untrack } from './use-core';
 import { logError, logErrorAndStop } from '../util/log';
-import { delay, safeCall, then } from '../util/promises';
+import { delay, safeCall, maybeThen } from '../util/promises';
 import { isFunction, isObject, type ValueOrPromise } from '../util/types';
 import { isServerPlatform } from '../platform/platform';
 import { implicit$FirstArg } from '../util/implicit_dollar';
@@ -32,6 +32,7 @@ import {
   type ReadonlySignal,
 } from '../state/signal';
 import { QObjectManagerSymbol } from '../state/constants';
+import { ComputedEvent, TaskEvent } from '../util/markers';
 
 export const TaskFlagsIsVisibleTask = 1 << 0;
 export const TaskFlagsIsTask = 1 << 1;
@@ -46,14 +47,14 @@ export const TaskFlagsIsCleanup = 1 << 5;
 /**
  * Used to signal to Qwik which state should be watched for changes.
  *
- * The `Tracker` is passed into the `taskFn` of `useTask`. It is intended to be used to wrap
- * state objects in a read proxy which signals to Qwik which properties should be watched for
- * changes. A change to any of the properties causes the `taskFn` to rerun.
+ * The `Tracker` is passed into the `taskFn` of `useTask`. It is intended to be used to wrap state
+ * objects in a read proxy which signals to Qwik which properties should be watched for changes. A
+ * change to any of the properties causes the `taskFn` to rerun.
  *
  * ### Example
  *
- * The `obs` passed into the `taskFn` is used to mark `state.count` as a property of interest.
- * Any changes to the `state.count` property will cause the `taskFn` to rerun.
+ * The `obs` passed into the `taskFn` is used to mark `state.count` as a property of interest. Any
+ * changes to the `state.count` property will cause the `taskFn` to rerun.
  *
  * ```tsx
  * const Cmp = component$(() => {
@@ -73,9 +74,8 @@ export const TaskFlagsIsCleanup = 1 << 5;
  * });
  * ```
  *
- * @see `useTask`
- *
  * @public
+ * @see `useTask`
  */
 // </docs>
 export interface Tracker {
@@ -83,7 +83,7 @@ export interface Tracker {
    * Include the expression using stores / signals to track:
    *
    * ```tsx
-   * track(() => store.value)
+   * track(() => store.count);
    * ```
    *
    * The `track()` function also returns the value of the scoped expression:
@@ -92,26 +92,27 @@ export interface Tracker {
    * const count = track(() => store.count);
    * ```
    */
-  <T>(ctx: () => T): T;
+  <T>(fn: () => T): T;
 
   /**
-   * Used to track the whole object. If any property of the passed store changes,
-   * the task will be scheduled to run.
+   * Used to track the whole object. If any property of the passed store changes, the task will be
+   * scheduled to run. Also accepts signals.
+   *
+   * ```tsx
+   * track(store);
+   * track(signal);
+   * ```
    */
-  <T extends {}>(obj: T): T;
+  <T extends object>(obj: T): T;
 }
 
-/**
- * @public
- */
+/** @public */
 export interface TaskCtx {
   track: Tracker;
   cleanup(callback: () => void): void;
 }
 
-/**
- * @public
- */
+/** @public */
 export interface ResourceCtx<T> {
   readonly track: Tracker;
   cleanup(callback: () => void): void;
@@ -119,45 +120,31 @@ export interface ResourceCtx<T> {
   readonly previous: T | undefined;
 }
 
-/**
- * @public
- */
+/** @public */
 export type TaskFn = (ctx: TaskCtx) => ValueOrPromise<void | (() => void)>;
 
-/**
- * @public
- */
+/** @public */
 export type ComputedFn<T> = () => T;
 
-/**
- * @public
- */
-export type ResourceFn<T> = (ctx: ResourceCtx<any>) => ValueOrPromise<T>;
+/** @public */
+export type ResourceFn<T> = (ctx: ResourceCtx<unknown>) => ValueOrPromise<T>;
 
-/**
- * @public
- */
+/** @public */
 export type ResourceReturn<T> = ResourcePending<T> | ResourceResolved<T> | ResourceRejected<T>;
 
-/**
- * @public
- */
+/** @public */
 export interface ResourcePending<T> {
   readonly value: Promise<T>;
   readonly loading: boolean;
 }
 
-/**
- * @public
- */
+/** @public */
 export interface ResourceResolved<T> {
   readonly value: Promise<T>;
   readonly loading: boolean;
 }
 
-/**
- * @public
- */
+/** @public */
 export interface ResourceRejected<T> {
   readonly value: Promise<T>;
   readonly loading: boolean;
@@ -167,51 +154,44 @@ export interface ResourceReturnInternal<T> {
   __brand: 'resource';
   _state: 'pending' | 'resolved' | 'rejected';
   _resolved: T | undefined;
-  _error: any;
+  _error: Error | undefined;
   _cache: number;
   _timeout: number;
   value: Promise<T>;
   loading: boolean;
 }
-/**
- * @public
- */
-export interface DescriptorBase<T = any, B = undefined> {
+/** @public */
+export interface DescriptorBase<T = unknown, B = unknown> {
   $qrl$: QRLInternal<T>;
   $el$: QwikElement;
   $flags$: number;
   $index$: number;
   $destroy$?: NoSerialize<() => void>;
-  $state$: B;
+  $state$: B | undefined;
 }
 
-/**
- * @public
- */
+/** @public */
 export type EagernessOptions = 'visible' | 'load' | 'idle';
 
-/**
- * @public
- */
+/** @public */
 export type VisibleTaskStrategy = 'intersection-observer' | 'document-ready' | 'document-idle';
 
-/**
- * @public
- */
+/** @public */
 export interface OnVisibleTaskOptions {
   /**
    * The strategy to use to determine when the "VisibleTask" should first execute.
    *
-   * - `intersection-observer`: the task will first execute when the element is visible in the viewport, under the hood it uses the IntersectionObserver API.
-   * - `document-ready`: the task will first execute when the document is ready, under the hood it uses the document `load` event.
-   * - `document-idle`: the task will first execute when the document is idle, under the hood it uses the requestIdleCallback API.
+   * - `intersection-observer`: the task will first execute when the element is visible in the
+   *   viewport, under the hood it uses the IntersectionObserver API.
+   * - `document-ready`: the task will first execute when the document is ready, under the hood it
+   *   uses the document `load` event.
+   * - `document-idle`: the task will first execute when the document is idle, under the hood it uses
+   *   the requestIdleCallback API.
    */
   strategy?: VisibleTaskStrategy;
 }
 
-/**
- * @public
- */
+/** @public */
 export interface UseTaskOptions {
   /**
    * - `visible`: run the effect when the element is visible.
@@ -226,15 +206,14 @@ export interface UseTaskOptions {
 /**
  * Reruns the `taskFn` when the observed inputs change.
  *
- * Use `useTask` to observe changes on a set of inputs, and then re-execute the `taskFn` when
- * those inputs change.
+ * Use `useTask` to observe changes on a set of inputs, and then re-execute the `taskFn` when those
+ * inputs change.
  *
  * The `taskFn` only executes if the observed inputs change. To observe the inputs, use the `obs`
  * function to wrap property reads. This creates subscriptions that will trigger the `taskFn` to
  * rerun.
  *
- * @see `Tracker`
- *
+ * @param task - Function which should be re-executed when changes to the inputs are detected
  * @public
  *
  * ### Example
@@ -278,13 +257,13 @@ export interface UseTaskOptions {
  * });
  * ```
  *
- * @param task - Function which should be re-executed when changes to the inputs are detected
  * @public
+ * @see `Tracker`
  */
 // </docs>
 export const useTaskQrl = (qrl: QRL<TaskFn>, opts?: UseTaskOptions): void => {
-  const { get, set, iCtx, i, elCtx } = useSequentialScope<boolean>();
-  if (get) {
+  const { val, set, iCtx, i, elCtx } = useSequentialScope<boolean>();
+  if (val) {
     return;
   }
   assertQrl(qrl);
@@ -311,13 +290,11 @@ interface Computed {
   <T>(qrl: ComputedFn<T>): ReadonlySignal<Awaited<T>>;
 }
 
-/**
- * @public
- */
+/** @public */
 export const useComputedQrl: ComputedQRL = <T>(qrl: QRL<ComputedFn<T>>): Signal<Awaited<T>> => {
-  const { get, set, iCtx, i, elCtx } = useSequentialScope<Signal<Awaited<T>>>();
-  if (get) {
-    return get;
+  const { val, set, iCtx, i, elCtx } = useSequentialScope<Signal<Awaited<T>>>();
+  if (val) {
+    return val;
   }
   assertQrl(qrl);
   const containerState = iCtx.$renderCtx$.$static$.$containerState$;
@@ -345,9 +322,7 @@ export const useComputedQrl: ComputedQRL = <T>(qrl: QRL<ComputedFn<T>>): Signal<
   return set(signal);
 };
 
-/**
- * @public
- */
+/** @public */
 export const useComputed$: Computed = implicit$FirstArg(useComputedQrl);
 
 // <docs markdown="../readme.md#useTask">
@@ -356,15 +331,14 @@ export const useComputed$: Computed = implicit$FirstArg(useComputedQrl);
 /**
  * Reruns the `taskFn` when the observed inputs change.
  *
- * Use `useTask` to observe changes on a set of inputs, and then re-execute the `taskFn` when
- * those inputs change.
+ * Use `useTask` to observe changes on a set of inputs, and then re-execute the `taskFn` when those
+ * inputs change.
  *
  * The `taskFn` only executes if the observed inputs change. To observe the inputs, use the `obs`
  * function to wrap property reads. This creates subscriptions that will trigger the `taskFn` to
  * rerun.
  *
- * @see `Tracker`
- *
+ * @param task - Function which should be re-executed when changes to the inputs are detected
  * @public
  *
  * ### Example
@@ -408,8 +382,8 @@ export const useComputed$: Computed = implicit$FirstArg(useComputedQrl);
  * });
  * ```
  *
- * @param task - Function which should be re-executed when changes to the inputs are detected
  * @public
+ * @see `Tracker`
  */
 // </docs>
 export const useTask$ = /*#__PURE__*/ implicit$FirstArg(useTaskQrl);
@@ -442,11 +416,11 @@ export const useTask$ = /*#__PURE__*/ implicit$FirstArg(useTaskQrl);
  */
 // </docs>
 export const useVisibleTaskQrl = (qrl: QRL<TaskFn>, opts?: OnVisibleTaskOptions): void => {
-  const { get, set, i, iCtx, elCtx } = useSequentialScope<Task>();
+  const { val, set, i, iCtx, elCtx } = useSequentialScope<Task<TaskFn>>();
   const eagerness = opts?.strategy ?? 'intersection-observer';
-  if (get) {
+  if (val) {
     if (isServerPlatform()) {
-      useRunTask(get, eagerness);
+      useRunTask(val, eagerness);
     }
     return;
   }
@@ -499,17 +473,20 @@ export type TaskDescriptor = DescriptorBase<TaskFn>;
 export interface ResourceDescriptor<T>
   extends DescriptorBase<ResourceFn<T>, ResourceReturnInternal<T>> {}
 
-export interface ComputedDescriptor<T> extends DescriptorBase<ComputedFn<T>, SignalInternal<T>> {}
+export interface ComputedDescriptor<T> extends DescriptorBase<ComputedFn<T>, Signal<T>> {}
 
 export type SubscriberHost = QwikElement;
 
-export type SubscriberEffect = TaskDescriptor | ResourceDescriptor<any> | ComputedDescriptor<any>;
+export type SubscriberEffect =
+  | TaskDescriptor
+  | ResourceDescriptor<unknown>
+  | ComputedDescriptor<unknown>;
 
-export const isResourceTask = (task: SubscriberEffect): task is ResourceDescriptor<any> => {
+export const isResourceTask = (task: SubscriberEffect): task is ResourceDescriptor<unknown> => {
   return (task.$flags$ & TaskFlagsIsResource) !== 0;
 };
 
-export const isComputedTask = (task: SubscriberEffect): task is ComputedDescriptor<any> => {
+export const isComputedTask = (task: SubscriberEffect): task is ComputedDescriptor<unknown> => {
   return (task.$flags$ & TaskFlagsIsComputed) !== 0;
 };
 export const runSubscriber = async (
@@ -531,13 +508,13 @@ export const runResource = <T>(
   task: ResourceDescriptor<T>,
   containerState: ContainerState,
   rCtx: RenderContext,
-  waitOn?: Promise<any>
+  waitOn?: Promise<unknown>
 ): ValueOrPromise<void> => {
   task.$flags$ &= ~TaskFlagsIsDirty;
   cleanupTask(task);
 
   const el = task.$el$;
-  const iCtx = newInvokeContext(rCtx.$static$.$locale$, el, undefined, 'TaskEvent');
+  const iCtx = newInvokeContext(rCtx.$static$.$locale$, el, undefined, TaskEvent);
   const { $subsManager$: subsManager } = containerState;
   iCtx.$renderCtx$ = rCtx;
   const taskFn = task.$qrl$.getFn(iCtx, () => {
@@ -552,7 +529,7 @@ export const runResource = <T>(
     task
   );
 
-  const track: Tracker = (obj: any, prop?: string) => {
+  const track: Tracker = (obj: (() => unknown) | object | Signal, prop?: string) => {
     if (isFunction(obj)) {
       const ctx = newInvokeContext();
       ctx.$renderCtx$ = rCtx;
@@ -566,7 +543,7 @@ export const runResource = <T>(
       logErrorAndStop(codeToText(QError_trackUseStore), obj);
     }
     if (prop) {
-      return obj[prop];
+      return (obj as Record<string, unknown>)[prop];
     } else if (isSignal(obj)) {
       return obj.value;
     } else {
@@ -592,26 +569,26 @@ export const runResource = <T>(
   };
 
   let resolve: (v: T) => void;
-  let reject: (v: any) => void;
+  let reject: (v: unknown) => void;
   let done = false;
 
-  const setState = (resolved: boolean, value: any) => {
+  const setState = (resolved: boolean, value: T | Error) => {
     if (!done) {
       done = true;
       if (resolved) {
         done = true;
         resource.loading = false;
         resource._state = 'resolved';
-        resource._resolved = value;
+        resource._resolved = value as T;
         resource._error = undefined;
 
-        resolve(value);
+        resolve(value as T);
       } else {
         done = true;
         resource.loading = false;
         resource._state = 'rejected';
-        resource._error = value;
-        reject(value);
+        resource._error = value as Error;
+        reject(value as Error);
       }
       return true;
     }
@@ -634,7 +611,7 @@ export const runResource = <T>(
   });
 
   const promise = safeCall(
-    () => then(waitOn, () => taskFn(opts)),
+    () => maybeThen(waitOn, () => taskFn(opts)),
     (value) => {
       setState(true, value);
     },
@@ -658,7 +635,7 @@ export const runResource = <T>(
 };
 
 export const runTask = (
-  task: TaskDescriptor | ComputedDescriptor<any>,
+  task: TaskDescriptor | ComputedDescriptor<unknown>,
   containerState: ContainerState,
   rCtx: RenderContext
 ): ValueOrPromise<void> => {
@@ -666,13 +643,13 @@ export const runTask = (
 
   cleanupTask(task);
   const hostElement = task.$el$;
-  const iCtx = newInvokeContext(rCtx.$static$.$locale$, hostElement, undefined, 'TaskEvent');
+  const iCtx = newInvokeContext(rCtx.$static$.$locale$, hostElement, undefined, TaskEvent);
   iCtx.$renderCtx$ = rCtx;
   const { $subsManager$: subsManager } = containerState;
   const taskFn = task.$qrl$.getFn(iCtx, () => {
     subsManager.$clearSub$(task);
   }) as TaskFn;
-  const track: Tracker = (obj: any, prop?: string) => {
+  const track: Tracker = (obj: (() => unknown) | object | Signal, prop?: string) => {
     if (isFunction(obj)) {
       const ctx = newInvokeContext();
       ctx.$subscriber$ = [0, task];
@@ -685,7 +662,9 @@ export const runTask = (
       logErrorAndStop(codeToText(QError_trackUseStore), obj);
     }
     if (prop) {
-      return obj[prop];
+      return (obj as Record<string, unknown>)[prop];
+    } else if (isSignal(obj)) {
+      return obj.value;
     } else {
       return obj;
     }
@@ -715,7 +694,7 @@ export const runTask = (
 };
 
 export const runComputed = (
-  task: ComputedDescriptor<any>,
+  task: ComputedDescriptor<unknown>,
   containerState: ContainerState,
   rCtx: RenderContext
 ): ValueOrPromise<void> => {
@@ -723,7 +702,7 @@ export const runComputed = (
   task.$flags$ &= ~TaskFlagsIsDirty;
   cleanupTask(task);
   const hostElement = task.$el$;
-  const iCtx = newInvokeContext(rCtx.$static$.$locale$, hostElement, undefined, 'ComputedEvent');
+  const iCtx = newInvokeContext(rCtx.$static$.$locale$, hostElement, undefined, ComputedEvent);
   iCtx.$subscriber$ = [0, task];
   iCtx.$renderCtx$ = rCtx;
 
@@ -736,7 +715,7 @@ export const runComputed = (
     taskFn,
     (returnValue) =>
       untrack(() => {
-        const signal = task.$state$;
+        const signal = task.$state$! as SignalInternal<unknown>;
         signal[QObjectSignalFlags] &= ~SIGNAL_UNASSIGNED;
         signal.untrackedValue = returnValue;
         signal[QObjectManagerSymbol].$notifySubs$();
@@ -763,7 +742,7 @@ export const destroyTask = (task: SubscriberEffect) => {
   if (task.$flags$ & TaskFlagsIsCleanup) {
     task.$flags$ &= ~TaskFlagsIsCleanup;
     const cleanup = task.$qrl$;
-    (cleanup as any)();
+    (cleanup as Function)();
   } else {
     cleanupTask(task);
   }
@@ -782,17 +761,25 @@ const useRunTask = (
   }
 };
 
-const getTaskHandlerQrl = (task: SubscriberEffect) => {
+const getTaskHandlerQrl = (task: SubscriberEffect): QRL<(ev: Event) => void> => {
   const taskQrl = task.$qrl$;
-  const taskHandler = createQRL(taskQrl.$chunk$, '_hW', _hW, null, null, [task], taskQrl.$symbol$);
+  const taskHandler = createQRL<(ev: Event) => void>(
+    taskQrl.$chunk$,
+    '_hW',
+    _hW,
+    null,
+    null,
+    [task],
+    taskQrl.$symbol$
+  );
   return taskHandler;
 };
 
-export const isTaskCleanup = (obj: any): obj is TaskDescriptor => {
+export const isTaskCleanup = (obj: unknown): obj is TaskDescriptor => {
   return isSubscriberDescriptor(obj) && !!(obj.$flags$ & TaskFlagsIsCleanup);
 };
 
-export const isSubscriberDescriptor = (obj: any): obj is SubscriberEffect => {
+export const isSubscriberDescriptor = (obj: unknown): obj is SubscriberEffect => {
   return isObject(obj) && obj instanceof Task;
 };
 
@@ -811,12 +798,12 @@ export const parseTask = (data: string) => {
   return new Task(strToInt(flags), strToInt(index), el as any, qrl as any, resource as any);
 };
 
-export class Task<T = undefined> implements DescriptorBase<any, T> {
+export class Task<T = unknown, B = T> implements DescriptorBase<unknown, Signal<B>> {
   constructor(
     public $flags$: number,
     public $index$: number,
     public $el$: QwikElement,
-    public $qrl$: QRLInternal<any>,
-    public $state$: T
+    public $qrl$: QRLInternal<T>,
+    public $state$: Signal<B> | undefined
   ) {}
 }

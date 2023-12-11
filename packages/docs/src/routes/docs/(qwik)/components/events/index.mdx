@@ -15,6 +15,13 @@ contributors:
   - AnthonyPAlicea
   - amatiash
   - harishkrishnan24
+  - fabian-hiller
+  - igorbabko
+  - mrhoodz
+  - julianobrasil
+  - maiieul
+updated_at: '2023-10-03T18:53:59Z'
+created_at: '2023-03-20T23:45:13Z'
 ---
 
 import CodeSandbox from '../../../../../components/code-sandbox/index.tsx';
@@ -89,7 +96,7 @@ export default component$(() => {
   const print = $((ev) => console.log('CLICKED!', ev));
   const increment = $(() => count.value++);
 
-  // The button when clicked will print "CLICKED!" to the console, increment the count and send a event to Google Analytics.
+  // The button when clicked will print "CLICKED!" to the console, increment the count and send an event to Google Analytics.
   return (
     <button
       onClick$={[print, increment, $(() => {
@@ -144,14 +151,14 @@ import { component$ } from '@builder.io/qwik';
 export default component$(() => {
   return (
     <a
-      href="/about"
+      href="/docs"
       preventdefault:click // This will prevent the default behavior of the "click" event.
       onClick$={() => {
         // event.PreventDefault() will not work here, because handler is dispatched asynchronously.
         alert('Do something else to simulate navigation...');
       }}
     >
-      Go to about page
+      Go to docs page
     </a>
   );
 });
@@ -234,36 +241,64 @@ export default component$(() => {
 
 > **NOTE** Using `VisibleTask` to listen for events is an anti-pattern in Qwik because it causes eager execution of code in the browser defeating [resumability](/docs/(qwik)/concepts/resumable/index.mdx). Only use it when you have no other choice. Most of the time, you should use JSX to listen for events: `<div onClick$={...}>` or `useOn(...)` event methods if you need to listen programmatically.
 
-## `PropFunction`
+## Custom event props
 
-When creating your components it is often useful to pass what looks like event handlers, (even though they are not DOM events, only callbacks.) Component boundaries in Qwik must be serializable, and functions are not serializable unless they are converted to a QRL using an optimizer. This is done through `$` suffix. QRLs are asynchronous and therefore we need to tell TypeScript that the function can't be called synchronously, we do this through `PropFunction` type.
+When creating your components it is often useful to pass custom event props that look like event handlers, (even though they are not DOM events, only callbacks). Component boundaries in Qwik must be serializable for the optimizer to split them up into separate chunks, and functions are not serializable unless they are converted to a QRL using the `$` sign.
 
+When typing `component$` with the Generics syntax, Qwik will handle the type transformation automatically for you.
+<CodeSandbox src="/src/routes/demo/events/custom-event/index.tsx" style={{ height: '10em' }}>
 ```tsx
-<CmpButton onClick={() => alert('CLICKED!')}>click me!</CmpButton>
-```
-
-The above is not possible because `onClick` is a function that is not serializable. Instead, we need to tell Optimizer to convert our function into a QRL. This is done by naming the property with `$` suffix as in this example.
-
-<CodeSandbox src="/src/routes/demo/events/prop-function/index.tsx" style={{ height: '10em' }}>
-```tsx
-import { type PropFunction, component$, Slot } from '@builder.io/qwik';
+import { component$, Slot, useStore } from '@builder.io/qwik';
 
 export default component$(() => {
-  return <CmpButton onClick$={() => alert('CLICKED!')}>click me!</CmpButton>;
+  return (
+    <Button onTripleClick$={() => alert('TRIPLE CLICKED!')}>
+      Triple click me!
+    </Button>
+  );
 });
 
-export const CmpButton = component$<{
-  // Important to tell TypeScript that this is async
-  onClick$?: PropFunction<() => void>;
-}>((props) => {
+type ButtonProps = {
+  onTripleClick$: () => void;
+};
+
+export const Button = component$<ButtonProps>(({ onTripleClick$ }) => {
+  const state = useStore({
+    clicks: 0,
+    lastClickTime: 0,
+  });
   return (
-    <button onClick$={props.onClick$}>
+    <button
+      onClick$={() => {
+        // triple click logic
+        const now = Date.now();
+        const timeBetweenClicks = now - state.lastClickTime;
+        state.lastClickTime = now;
+        if (timeBetweenClicks > 500) {
+          state.clicks = 0;
+        }
+        state.clicks++;
+        if (state.clicks === 3) {
+          // handle custom event
+          onTripleClick$();
+          state.clicks = 0;
+        }
+      }}
+    >
       <Slot />
     </button>
   );
 });
+
 ```
 </CodeSandbox>
+
+⚠️ When using type annotations, we need to wrap the event type with `PropFunction` in order to tell TypeScript that the function can't be called synchronously.
+```tsx
+component$(({ onTripleClick$ } : { onTripleClick$?: PropFunction<() => void> }) => {
+  ...
+});
+```
 
 ## Window and Document events
 
@@ -274,13 +309,13 @@ The purpose of the `window:on`/`document:` is to register an event at a current 
 1. The events can be registered declaratively in your JSX.
 2. The events get automatically cleaned up when the component is destroyed (No explicit bookkeeping and cleanup is needed).
 
-## `useOn[|window|document]` Hook
+## `useOn[window|document]` Hook
 
 - `useOn()`: listen to events on the current component's root element.
 - `useOnWindow()`: listen to events on the `window` object.
 - `useOnDocument()`: listen to events on the `document` object.
 
-`useOn[|window|document]()` hook will add a DOM-based event listener at the component level programmatically. This is often useful when you want to create your own use hooks or if you don't know the event name at the time of compilation.
+`useOn[window|document]()` hook will add a DOM-based event listener at the component level programmatically. This is often useful when you want to create your own use hooks or if you don't know the event name at the time of compilation.
 
 <CodeSandbox src="/src/routes/demo/events/use-on/index.tsx" style={{ height: '10em' }}>
 ```tsx

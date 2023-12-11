@@ -1,23 +1,26 @@
 import { createDOM } from '../../testing/library';
-import { expectDOM } from '../../testing/expect-dom.unit';
+import { expectDOM } from '../../testing/expect-dom';
 import { inlinedQrl } from '../qrl/qrl';
 import { useStylesQrl } from '../use/use-styles';
-import { type PropsOf, component$ } from './component.public';
-import { suite } from 'uvu';
+import { type PropsOf, component$, type PropFunctionProps } from './component.public';
 import { useStore } from '../use/use-store.public';
 import { useLexicalScope } from '../use/use-lexical-scope.public';
+import { describe, test } from 'vitest';
+import type { InputHTMLAttributes } from '../render/jsx/types/jsx-generated';
+import type { QwikIntrinsicElements } from '../render/jsx/types/jsx-qwik-elements';
 
-/**
- * Applying new unit test library/layer
- * `@builder.io/qwik/testing`  ==>  ../../testing/library
- */
-const qComponent = suite('q-component');
-qComponent('should declare and render basic component', async () => {
-  const { screen, render } = await createDOM();
-  await render(<HelloWorld />);
-  await expectDOM(
-    screen,
-    `
+describe('q-component', () => {
+  /**
+   * Applying new unit test library/layer
+   *
+   * `@builder.io/qwik/testing` ==> ../../testing/library
+   */
+  test('should declare and render basic component', async () => {
+    const { screen, render } = await createDOM();
+    await render(<HelloWorld />);
+    await expectDOM(
+      screen,
+      `
     <host q:version="dev" q:container="resumed" q:render="dom-dev">
         <style q:style="pfkgyr-0" hidden="">
           {}
@@ -26,16 +29,16 @@ qComponent('should declare and render basic component', async () => {
         <span>Hello World</span>
         <!--/qv-->
       </host>`
-  );
-});
+    );
+  });
 
-qComponent('should render Counter and accept events', async () => {
-  const { screen, render, userEvent } = await createDOM();
+  test('should render Counter and accept events', async () => {
+    const { screen, render, userEvent } = await createDOM();
 
-  await render(<MyCounter step={5} value={15} />);
-  await expectDOM(
-    screen,
-    `
+    await render(<MyCounter step={5} value={15} />);
+    await expectDOM(
+      screen,
+      `
     <host q:version="dev" q:container="resumed" q:render="dom-dev">
     <!--qv -->
     <my-counter>
@@ -45,11 +48,11 @@ qComponent('should render Counter and accept events', async () => {
     </my-counter>
     <!--/qv-->
   </host>`
-  );
-  await userEvent('button.decrement', 'click');
-  await expectDOM(
-    screen,
-    `
+    );
+    await userEvent('button.decrement', 'click');
+    await expectDOM(
+      screen,
+      `
 <host q:version="dev" q:container="resumed" q:render="dom-dev">
   <!--qv -->
   <my-counter>
@@ -67,29 +70,29 @@ qComponent('should render Counter and accept events', async () => {
   </my-counter>
   <!--/qv-->
 </host>`
-  );
-});
+    );
+  });
 
-qComponent('should render a collection of todo items', async () => {
-  const { screen, render } = await createDOM();
+  test('should render a collection of todo items', async () => {
+    const { screen, render } = await createDOM();
 
-  const items = {
-    items: [
-      {
-        done: true,
-        title: 'Task 1',
-      },
-      {
-        done: false,
-        title: 'Task 2',
-      },
-    ],
-  };
-  await render(<Items items={items} />);
-  await delay(0);
-  await expectDOM(
-    screen,
-    `
+    const items = {
+      items: [
+        {
+          done: true,
+          title: 'Task 1',
+        },
+        {
+          done: false,
+          title: 'Task 2',
+        },
+      ],
+    };
+    await render(<Items items={items} />);
+    await delay(0);
+    await expectDOM(
+      screen,
+      `
     <host q:version="dev" q:container="resumed" q:render="dom-dev">
       <!--qv -->
       <items>
@@ -110,7 +113,61 @@ qComponent('should render a collection of todo items', async () => {
       <!--/qv-->
     </host>
     `
-  );
+    );
+  });
+
+  test('types work as expected', () => {
+    const Input1 = component$<InputHTMLAttributes<HTMLInputElement>>((props) => {
+      return <input {...props} />;
+    });
+
+    const Input2 = component$((props: PropFunctionProps<InputHTMLAttributes<HTMLInputElement>>) => {
+      return <input {...props} />;
+    });
+
+    const Input3 = component$((props: Partial<InputHTMLAttributes<HTMLInputElement>>) => {
+      return <input {...props} />;
+    });
+
+    const Input4 = component$(
+      (props: Partial<PropFunctionProps<InputHTMLAttributes<HTMLInputElement>>>) => {
+        return <input {...props} />;
+      }
+    );
+
+    type Input5Props = {
+      type: 'text' | 'number';
+    } & Partial<InputHTMLAttributes<HTMLInputElement>>;
+
+    const Input5 = component$<Input5Props>(({ type, ...props }) => {
+      return <input type={type} {...props} />;
+    });
+
+    type Input6Props = {
+      type: 'text' | 'number';
+    } & QwikIntrinsicElements['input'];
+
+    const Input6 = component$<Input6Props>(({ type, ...props }) => {
+      return (
+        <div>
+          <input type={type} {...props} />
+        </div>
+      );
+    });
+
+    component$(() => {
+      return (
+        <>
+          <Input1 value="1" />
+          <Input2 value="2" />
+          <Input3 value="3" />
+          <Input4 value="4" />
+          <Input5 value="5" type="text" />
+          <Input6 value="6" type="number" />
+        </>
+      );
+    });
+  });
 });
 
 /////////////////////////////////////////////////////////////////////////////
@@ -207,5 +264,3 @@ export const Items = component$((props: { items: ItemsObj }) => {
 function delay(milliseconds: number): Promise<void> {
   return new Promise((res) => setTimeout(res, milliseconds));
 }
-
-qComponent.run();

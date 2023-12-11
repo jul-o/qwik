@@ -1,21 +1,25 @@
 import type { HTMLAttributes, IntrinsicHTMLElements } from './jsx-generated';
 
+/** All unknown attributes are allowed */
 interface QwikCustomHTMLAttributes<T extends Element> extends HTMLAttributes<T> {
   [key: string]: any;
 }
 
-interface QwikCustomHTMLElement extends Element {}
-
 /**
+ * Any custom DOM element.
+ *
  * @public
  */
+interface QwikCustomHTMLElement extends Element {}
+
+/** @public */
 export interface QwikIntrinsicAttributes {
   key?: string | number | undefined | null;
 }
 
 /**
- * The interface holds available attributes of both native DOM elements and custom Qwik elements.
- * An example showing how to define a customizable wrapper component:
+ * The interface holds available attributes of both native DOM elements and custom Qwik elements. An
+ * example showing how to define a customizable wrapper component:
  *
  * ```tsx
  * import { component$, Slot, type QwikIntrinsicElements } from "@builder.io/qwik";
@@ -32,8 +36,13 @@ export interface QwikIntrinsicAttributes {
  *   );
  * });
  * ```
+ *
  * @public
  */
 export interface QwikIntrinsicElements extends IntrinsicHTMLElements {
-  [key: string]: QwikCustomHTMLAttributes<QwikCustomHTMLElement>;
+  /**
+   * Custom DOM elements can have any name We need to add the empty object to match the type with
+   * the Intrinsic elements
+   */
+  [key: string]: {} | QwikCustomHTMLAttributes<QwikCustomHTMLElement>;
 }

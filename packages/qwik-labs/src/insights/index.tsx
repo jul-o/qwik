@@ -2,18 +2,10 @@ import { component$ } from '@builder.io/qwik';
 import { z } from 'zod';
 
 export interface InsightsPayload {
-  /**
-   * Unique ID per user session.
-   *
-   * Every page refresh constitutes a new SessionID.
-   * An SPA navigation will generate a new SessionID.
-   * NOTE: A user session implies same route URL.
-   */
-  sessionID: string;
+  /** Qwik version */
+  qVersion: string;
 
-  /**
-   * Manifest Hash of the container.
-   */
+  /** Manifest Hash of the container. */
   manifestHash: string;
 
   /**
@@ -26,56 +18,41 @@ export interface InsightsPayload {
   /**
    * Previous symbol received on the client.
    *
-   * Client periodically sends symbol log to the server. Being able to connect the order
-   * of symbols is useful for server clustering. Sending previous symbol name allows the
-   * server to stitch the symbol list together.
+   * Client periodically sends symbol log to the server. Being able to connect the order of symbols
+   * is useful for server clustering. Sending previous symbol name allows the server to stitch the
+   * symbol list together.
    */
   previousSymbol: string | null;
 
-  /**
-   * List of symbols which have been received since last update.
-   */
+  /** List of symbols which have been received since last update. */
   symbols: InsightSymbol[];
 }
 
 export interface InsightSymbol {
-  /**
-   * Symbol name
-   */
+  /** Symbol name */
   symbol: string;
 
-  /**
-   * Current route so we can have a better understanding of
-   * which symbols are needed for each route.
-   */
+  /** Current route so we can have a better understanding of which symbols are needed for each route. */
   route: string;
 
-  /**
-   * Time delta since last symbol. Can be used to stich symbol requests together
-   */
+  /** Time delta since last symbol. Can be used to stich symbol requests together */
   delay: number;
 
-  /**
-   * Number of ms between the time the symbol was requested and it was loaded.
-   */
+  /** Number of ms between the time the symbol was requested and it was loaded. */
   latency: number;
 
-  /**
-   * Number of ms between the q:route attribute change and the qsymbol event
-   */
+  /** Number of ms between the q:route attribute change and the qsymbol event */
   timeline: number;
 
   /**
-   * Was this symbol as a result of user interaction. User interactions represent roots for clouters.
+   * Was this symbol as a result of user interaction. User interactions represent roots for
+   * clouters.
    */
   interaction: boolean;
 }
 
 export interface InsightsError {
-  sessionID: string;
-  /**
-   * Manifest Hash of the container.
-   */
+  /** Manifest Hash of the container. */
   manifestHash: string;
   timestamp: number;
   url: string;
@@ -89,7 +66,6 @@ export interface InsightsError {
 
 export const InsightsError = z.object({
   manifestHash: z.string(),
-  sessionID: z.string(),
   url: z.string(),
   timestamp: z.number(),
   source: z.string(),
@@ -110,7 +86,7 @@ export const InsightSymbol = z.object({
 });
 
 export const InsightsPayload = z.object({
-  sessionID: z.string(),
+  qVersion: z.string(),
   manifestHash: z.string(),
   publicApiKey: z.string(),
   previousSymbol: z.string().nullable(),
@@ -141,7 +117,6 @@ export const Insights = component$<{ publicApiKey: string; postUrl?: string }>(
 interface QwikSymbolTrackerWindow extends Window {
   qSymbolTracker: {
     symbols: InsightSymbol[];
-    sessionID: string;
     publicApiKey: string;
   };
 }
@@ -160,7 +135,7 @@ function symbolTracker(
   publicApiKey: string,
   postUrl: string
 ) {
-  const sessionID = Math.random().toString(36).slice(2);
+  const qVersion = document.querySelector('[q\\:version]')?.getAttribute('q:version') || 'unknown';
   const manifestHash =
     document.querySelector('[q\\:manifest-hash]')?.getAttribute('q:manifest-hash') || 'dev';
   const qSymbols: InsightSymbol[] = [];
@@ -170,7 +145,6 @@ function symbolTracker(
   window.qSymbolTracker = {
     symbols: qSymbols,
     publicApiKey,
-    sessionID,
   };
   let timeoutID: ReturnType<typeof setTimeout> | null;
   let qRouteChangeTime = performance.now();
@@ -188,7 +162,7 @@ function symbolTracker(
     timeoutID = null;
     if (qSymbols.length > flushSymbolIndex) {
       const payload = {
-        sessionID,
+        qVersion,
         publicApiKey,
         manifestHash,
         previousSymbol: flushSymbolIndex == 0 ? null : qSymbols[flushSymbolIndex - 1].symbol,
@@ -234,7 +208,6 @@ function symbolTracker(
     const error = event.error;
     const payload = {
       url: location.toString(),
-      sessionID: sessionID,
       manifestHash,
       timestamp: new Date().getTime(),
       source: event.filename,

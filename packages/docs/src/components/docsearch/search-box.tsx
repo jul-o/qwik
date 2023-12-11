@@ -1,4 +1,10 @@
-import { component$, useVisibleTask$, useContext, type Signal } from '@builder.io/qwik';
+import {
+  component$,
+  useVisibleTask$,
+  useContext,
+  type Signal,
+  type PropFunction,
+} from '@builder.io/qwik';
 
 import { MAX_QUERY_SIZE } from './constants';
 import { SearchContext } from './context';
@@ -17,7 +23,7 @@ interface SearchBoxProps {
   state: DocSearchState;
   autoFocus: boolean;
   inputRef: Signal<HTMLInputElement | null>;
-  onClose$: () => void;
+  onClose$: PropFunction<() => void>;
 }
 
 export const SearchBox = component$((props: SearchBoxProps) => {
@@ -66,7 +72,7 @@ export const SearchBox = component$((props: SearchBoxProps) => {
           placeholder="Search docs or ask a question"
           type="search"
           ref={props.inputRef as any}
-          onInput$={(event: Event) => {
+          onInput$={(event) => {
             context.onInput?.(event);
           }}
           // TODO: preventdefault:keydown by key's condition

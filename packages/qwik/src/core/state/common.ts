@@ -21,17 +21,15 @@ import type { Signal } from './signal';
 export interface SubscriptionManager {
   $groupToManagers$: GroupToManagersMap;
   $createManager$(map?: Subscriptions[]): LocalSubscriptionManager;
-  $clearSub$: (sub: SubscriberEffect | SubscriberHost | Node) => void;
-  $clearSignal$: (sub: SubscriberSignal) => void;
+  $clearSub$: (group: Group) => void;
+  $clearSignal$: (signal: SubscriberSignal) => void;
 }
 
 export type QObject<T extends {}> = T & { __brand__: 'QObject' };
 
 export type TargetType = Record<string | symbol, any>;
 
-/**
- * @internal
- */
+/** @internal */
 export const verifySerializable = <T>(value: T, preMessage?: string): T => {
   const seen = new Set();
   return _verifySerializable(value, seen, '_', preMessage);
@@ -126,8 +124,8 @@ export const fastWeakSerialize = (obj: any): boolean => {
 /**
  * Returned type of the `noSerialize()` function. It will be TYPE or undefined.
  *
- * @see noSerialize
  * @public
+ * @see noSerialize
  */
 export type NoSerialize<T> = (T & { __no_serialize__: true }) | undefined;
 
@@ -137,9 +135,9 @@ export type NoSerialize<T> = (T & { __no_serialize__: true }) | undefined;
 /**
  * Marks a property on a store as non-serializable.
  *
- * At times it is necessary to store values on a store that are non-serializable. Normally this
- * is a runtime error as Store wants to eagerly report when a non-serializable property is
- * assigned to it.
+ * At times it is necessary to store values on a store that are non-serializable. Normally this is a
+ * runtime error as Store wants to eagerly report when a non-serializable property is assigned to
+ * it.
  *
  * You can use `noSerialize()` to mark a value as non-serializable. The value is persisted in the
  * Store but does not survive serialization. The implication is that when your application is
@@ -158,10 +156,8 @@ export const noSerialize = <T extends object | undefined>(input: T): NoSerialize
   return input as any;
 };
 
-/**
- * @internal
- */
-export const _weakSerialize = <T extends Record<string, any>>(input: T): Partial<T> => {
+/** @internal */
+export const _weakSerialize = <T extends object>(input: T): Partial<T> => {
   weakSerializeSet.add(input);
   return input as any;
 };
@@ -174,24 +170,20 @@ export const isConnected = (sub: SubscriberEffect | SubscriberHost): boolean => 
   }
 };
 
-/**
- * @public
- */
+/** @public */
 export const unwrapProxy = <T>(proxy: T): T => {
   return isObject(proxy) ? getProxyTarget<any>(proxy) ?? proxy : proxy;
 };
 
-export const getProxyTarget = <T extends Record<string, any>>(obj: T): T | undefined => {
+export const getProxyTarget = <T extends object>(obj: T): T | undefined => {
   return (obj as any)[QOjectTargetSymbol];
 };
 
-export const getSubscriptionManager = (
-  obj: Record<string, any>
-): LocalSubscriptionManager | undefined => {
+export const getSubscriptionManager = (obj: object): LocalSubscriptionManager | undefined => {
   return (obj as any)[QObjectManagerSymbol];
 };
 
-export const getProxyFlags = <T = Record<string, any>>(obj: T): number | undefined => {
+export const getProxyFlags = <T = object>(obj: T): number | undefined => {
   return (obj as any)[QObjectFlagsSymbol];
 };
 
@@ -205,7 +197,7 @@ type SubscriberB = readonly [
   prop: string,
 ];
 
-type SubscriberC = readonly [
+export type SubscriberC = readonly [
   type: 3 | 4,
   host: SubscriberHost | Text,
   signal: Signal,
@@ -235,10 +227,9 @@ export type SubscriberSignal = B | C;
 
 export type Subscriptions = A | SubscriberSignal;
 
-export type GroupToManagersMap = Map<
-  SubscriberHost | SubscriberEffect | Node,
-  LocalSubscriptionManager[]
->;
+type Group = SubscriberEffect | SubscriberHost | Node;
+
+export type GroupToManagersMap = Map<Group, LocalSubscriptionManager[]>;
 
 export const serializeSubscription = (sub: Subscriptions, getObjId: GetObjID) => {
   const type = sub[0];
@@ -311,7 +302,7 @@ export const createSubscriptionManager = (containerState: ContainerState): Subsc
     $createManager$: (initialMap?: Subscriptions[]) => {
       return new LocalSubscriptionManager(groupToManagers, containerState, initialMap);
     },
-    $clearSub$: (group: SubscriberHost | SubscriberEffect | Node) => {
+    $clearSub$: (group: Group) => {
       const managers = groupToManagers.get(group);
       if (managers) {
         for (const manager of managers) {
@@ -357,7 +348,7 @@ export class LocalSubscriptionManager {
     }
   }
 
-  $addToGroup$(group: SubscriberHost | SubscriberEffect | Node, manager: LocalSubscriptionManager) {
+  $addToGroup$(group: Group, manager: LocalSubscriptionManager) {
     let managers = this.$groupToManagers$.get(group);
     if (!managers) {
       this.$groupToManagers$.set(group, (managers = []));
@@ -367,7 +358,7 @@ export class LocalSubscriptionManager {
     }
   }
 
-  $unsubGroup$(group: SubscriberEffect | SubscriberHost | Node) {
+  $unsubGroup$(group: Group) {
     const subs = this.$subs$;
     for (let i = 0; i < subs.length; i++) {
       const found = subs[i][1] === group;
@@ -417,7 +408,7 @@ export class LocalSubscriptionManager {
     ) {
       return;
     }
-    subs.push([...sub, key] as any);
+    subs.push((__lastSubscription = [...sub, key] as any));
     this.$addToGroup$(group, this);
   }
 
@@ -431,6 +422,15 @@ export class LocalSubscriptionManager {
       notifyChange(sub, this.$containerState$);
     }
   }
+}
+
+let __lastSubscription: Subscriptions | undefined;
+
+export function getLastSubscription(): Subscriptions | undefined {
+  // HACK(misko): This is a hack to get the last subscription.
+  // It is used by `executeSignalOperation` to update the target element
+  // after the subscription has been created.
+  return __lastSubscription;
 }
 
 const must = <T>(a: T): NonNullable<T> => {

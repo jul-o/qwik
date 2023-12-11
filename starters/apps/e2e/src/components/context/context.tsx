@@ -56,6 +56,7 @@ export const ContextApp = component$(() => {
       <Issue1971 />
       <Issue2087 />
       <Issue2894 />
+      <Issue5356 />
     </div>
   );
 });
@@ -72,12 +73,14 @@ export const ContextFromSlot = component$(() => {
 // This code will not work because its async before reading subs
 export const Level2 = component$(() => {
   const level2State1 = useStore({ displayName: "Level2 / state1", count: 0 });
+  // read context1 before changing it
+  const state1 = useContext(Context1);
+  // change context1
   useContextProvider(Context1, level2State1);
 
   const state3 = useStore({ displayName: "Level2 / state3", count: 0 });
   useContextProvider(Context3, state3);
 
-  const state1 = useContext(Context1);
   const state2 = useContext(Context2);
   const stateSlot = useContext(ContextSlot);
 
@@ -255,3 +258,55 @@ export const Issue2894_Consumer = component$(() => {
   const ctx = useContext(CTX_2894);
   return <div id="issue2894-value">Value: {ctx.foo}</div>;
 });
+
+export const Issue5356Context = createContextId<object>("issue-5356");
+export const Issue5356 = component$(() => {
+  useContextProvider(Issue5356Context, {});
+
+  return <Issue5356_Parent />;
+});
+
+export const Issue5356_Parent = component$(() => {
+  const signal = useSignal(1);
+
+  const children = [1, 2];
+
+  return (
+    <div id="issue-5356">
+      <button id="issue5356-button-1" onClick$={() => (signal.value = 1)}>
+        1
+      </button>
+      <button id="issue5356-button-2" onClick$={() => (signal.value = 2)}>
+        2
+      </button>
+
+      <>
+        {children.map((value) => (
+          <Issue5356_Child
+            key={value}
+            value={value}
+            active={signal.value === value}
+          />
+        ))}
+      </>
+      <>
+        {[
+          <Issue5356_Child value={3} active={signal.value === 1} />,
+          <Issue5356_Child value={4} active={signal.value === 2} />,
+        ]}
+      </>
+    </div>
+  );
+});
+
+export const Issue5356_Child = component$<{ value: number; active: boolean }>(
+  (props) => {
+    useContext(Issue5356Context);
+
+    return (
+      <div id={`issue5356-child-${props.value}`}>
+        Child {props.value}, active: {props.active ? "true" : "false"}
+      </div>
+    );
+  },
+);

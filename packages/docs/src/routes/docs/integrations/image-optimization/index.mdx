@@ -8,6 +8,15 @@ contributors:
   - mhevery
   - gioboa
   - fabiobiondi
+  - adamdbradley
+  - igorbabko
+  - Benny-Nottonson
+  - mrhoodz
+  - avanderpluijm
+  - fabian-hiller
+  - manucorporat
+updated_at: '2023-10-03T18:53:23Z'
+created_at: '2023-04-19T22:13:46Z'
 ---
 import CodeSandbox from '../../../../components/code-sandbox/index.tsx';
 
@@ -30,7 +39,7 @@ This is a built-in feature that relies on the [`vite-imagetools`](https://www.np
 * Import any image from the `src` folder
 * The image is converted in several webp images, one for each breakpoint (200px, 400px, 600px, 800px, 1200px)
 * The image is processed and optimized to reduce its size
-* An `<img>` element is rendered, using the `srcset` attribute to sets the image source for several resolutions
+* An `<img>` element is rendered, using the `srcset` attribute to set the image source for several resolutions
 * Now the browser will load the most suitable image for the resolution in use
 
 #### Key Points
@@ -130,7 +139,7 @@ but in that case you need to manually specify the `height` as well to avoid it b
 
 Below you can see a simple trick to avoid having to manually set the `height`, while also maintaining the aspect ratio:
 
-> **TIP:** you should always specify `width` and `height` values to prevents layout reflow
+> **TIP:** you should always specify `width` and `height` values to prevent layout reflow
 
 
 ```tsx

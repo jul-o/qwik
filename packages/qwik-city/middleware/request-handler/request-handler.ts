@@ -6,6 +6,8 @@ import { renderQwikMiddleware, resolveRequestHandlers } from './resolve-request-
 import { loadRoute } from '../../runtime/src/routing';
 
 /**
+ * The request handler for QwikCity. Called by every integration.
+ *
  * @public
  */
 export async function requestHandler<T = unknown>(

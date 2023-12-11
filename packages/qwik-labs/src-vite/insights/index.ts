@@ -5,34 +5,48 @@ import { join } from 'node:path';
 import { PluginOption } from 'vite';
 
 const logWarn = (message?: any) => {
-  console.warn('\x1b[33m%s\x1b[0m', `\n\nQWIK WARN: ${message}\n`);
+  // eslint-disable-next-line no-console
+  console.warn('\x1b[33m%s\x1b[0m', `qwikInsight()[WARN]: ${message}`);
+};
+
+const log = (message?: any) => {
+  // eslint-disable-next-line no-console
+  console.log('\x1b[35m%s\x1b[0m', `qwikInsight(): ${message}`);
 };
 
 export async function qwikInsights(qwikInsightsOpts: {
   publicApiKey: string;
   baseUrl?: string;
+  outDir?: string;
 }): Promise<PluginOption> {
-  const { publicApiKey, baseUrl = 'https://qwik-insights.builder.io' } = qwikInsightsOpts;
+  const {
+    publicApiKey,
+    baseUrl = 'https://qwik-insights.builder.io',
+    outDir = 'dist',
+  } = qwikInsightsOpts;
   let isProd = false;
-  const outDir = 'dist';
   const vitePlugin: PluginOption = {
     name: 'vite-plugin-qwik-insights',
     enforce: 'pre',
+    apply: 'build',
     async config(viteConfig) {
       isProd = viteConfig.mode !== 'ssr';
       if (isProd) {
         const qManifest: QwikVitePluginOptions['entryStrategy'] = { type: 'smart' };
         try {
-          const response = await fetch(`${baseUrl}/api/v1/${publicApiKey}/bundles/`);
-          const bundles = await response.json();
-          qManifest.manual = bundles;
+          const response = await fetch(`${baseUrl}/api/v1/${publicApiKey}/bundles/strategy/`);
+          const strategy = await response.json();
+          Object.assign(qManifest, strategy);
         } catch (e) {
           logWarn('fail to fetch manifest from Insights DB');
         }
-        if (!existsSync(join(process.cwd(), outDir))) {
-          mkdirSync(join(process.cwd(), outDir));
+        const cwdRelativePath = join(viteConfig.root || '.', outDir);
+        const cwdRelativePathJson = join(cwdRelativePath, 'q-insights.json');
+        if (!existsSync(join(process.cwd(), cwdRelativePath))) {
+          mkdirSync(join(process.cwd(), cwdRelativePath), { recursive: true });
         }
-        await writeFile(join(process.cwd(), outDir, 'q-insights.json'), JSON.stringify(qManifest));
+        log('Fetched latest Qwik Insight data into: ' + cwdRelativePathJson);
+        await writeFile(join(process.cwd(), cwdRelativePathJson), JSON.stringify(qManifest));
       }
     },
     closeBundle: async () => {
